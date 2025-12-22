@@ -1,37 +1,15 @@
 #!/usr/bin/env python3
-"""
-Example: Training with Gomoku Environment
-
-This example demonstrates how to train an LLM to play Gomoku using the
-simplified GameEnvironment with GomokuGame.
-
-Key features:
-- Uses generic GameEnvironment with GomokuGame class
-- Supports dynamic initial state generation
-- Integrates GameStatsClient to fetch per-step game metrics
-
-Usage:
-    1. Start the Gomoku game server:
-       python opentinker/environment/gomoku/gomoku_server.py
-       
-    2. Start the scheduler:
-       python opentinker/scheduler/launch_scheduler.py
-       
-    3. Run this client:
-       python gomoku_client.py
-"""
-
 import torch
 from transformers import AutoTokenizer
 from omegaconf import OmegaConf
 import hydra
 
-from http_training_client import ServiceClient, SchedulerClient
+from utils.http_training_client import ServiceClient, SchedulerClient
 from opentinker.environment.base_game_environment import GameEnvironment
 from opentinker.environment.gomoku import GomokuGame
 from opentinker.environment.game_stats_client import GameStatsClient
-from utils import resolve_paths_in_config
-from scheduler_client_lifecycle import get_lifecycle_manager
+from utils.utils import resolve_paths_in_config
+from utils.scheduler_client_lifecycle import get_lifecycle_manager
 
 
 @hydra.main(config_path="client_config", config_name="gomoku_param.yaml")

@@ -1,48 +1,31 @@
 #!/usr/bin/env python3
-"""
-Example: Math Training with GameEnvironment Pattern
-
-Uses the same GameEnvironment pattern as Gomoku with reward computed in game step().
-
-Usage:
-    1. Start the Math game server:
-       python opentinker/environment/math/math_server.py
-       
-    2. Start the scheduler:
-       python opentinker/scheduler/launch_scheduler.py
-       
-    3. Run this client:
-       python math_client_unified.py
-"""
-
 import hydra
 from omegaconf import OmegaConf
-from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 from torchdata.stateful_dataloader import StatefulDataLoader
 
-from http_training_client import ServiceClient, SchedulerClient
+from utils.http_training_client import ServiceClient, SchedulerClient
 from opentinker.environment.base_game_environment import GameEnvironment
 from opentinker.environment.base_data_generator import DynamicGameDataset, collate_fn
-from opentinker.environment.math import MathGame
+from opentinker.environment.math.math_tool_game import CodeInterpreterMathGame
 from opentinker.environment.static_data_generator import StaticDatasetGenerator
 from opentinker.environment.game_stats_client import GameStatsClient
-from utils import resolve_paths_in_config
-from scheduler_client_lifecycle import get_lifecycle_manager
+from utils.utils import resolve_paths_in_config
+from utils.scheduler_client_lifecycle import get_lifecycle_manager
 from verl.trainer.main_ppo import create_rl_sampler
-from opentinker.environment.math.math_env import MathGameEnvironment
+from opentinker.environment.math.math_tool_env import MathCodeInterpreterEnvironment
 
-
-@hydra.main(config_path="client_config", config_name="math_param.yaml")
+@hydra.main(config_path="client_config", config_name="math_code_interpreter_param.yaml")
 def main(args):
     args = resolve_paths_in_config(args)
     lifecycle = get_lifecycle_manager()
     
     print("=" * 60)
-    print("Math Training with GameEnvironment Pattern")
+    print("Math Training with Code Interpreter (Agent Loop)")
     print("=" * 60)
     
     # 1. Submit job to scheduler
+    print("\n[1/4] Submitting job to scheduler...")
     scheduler_client = SchedulerClient(
         scheduler_url=args.get("scheduler_url", "http://localhost:8780"),
         api_key=args.get("scheduler_api_key")
@@ -61,27 +44,33 @@ def main(args):
     
     print(f"✓ Job {job_id} allocated at {server_url}")
     
-    # 2. Setup environment (job_id is automatically handled)
+    # 2. Setup environment
+    print("\n[2/4] Setting up environment...")
     env_endpoint = args.interaction.config.env_endpoint
-    env = MathGameEnvironment(
-        game_class=MathGame,
+    env = MathCodeInterpreterEnvironment(
+        game_class=CodeInterpreterMathGame,
         config=args,
         data_paths=[args.data_path],
         val_data_paths=[args.val_data_path] if args.val_data_path else None,
-        job_id=job_id,  # Pass job_id directly
+        job_id=job_id,
     )
-    print(f"✓ Environment created, interaction config: {env.get_interaction_config_path()}")
+    print(f"✓ Environment created")
+    print(f"  - Interaction config: {env.get_interaction_config_path()}")
+    print(f"  - Game server endpoint: {env_endpoint}")
     
-    # 3. Setup game stats client (use env.job_id for consistency)
+    # 3. Setup game stats client
+    print("\n[3/4] Connecting to game server...")
     game_stats = GameStatsClient(env_endpoint, job_id=env.job_id)
     if game_stats.health_check():
         game_stats.reset_all()
-        print(f"✓ Connected to math server at {env_endpoint}")
+        print(f"✓ Connected to game server at {env_endpoint}")
     else:
         game_stats = None
-        print(f"⚠ Math server not responding at {env_endpoint}")
+        print(f"⚠ Game server not responding at {env_endpoint}")
+        print(f"  Make sure to start: python opentinker/environment/math/code_interpreter_math_server.py --port {args.interaction.config.env_port}")
     
-    # 4. Connect to training server
+    # 4. Connect to training server and train
+    print("\n[4/4] Starting training...")
     client = ServiceClient(
         server_url=server_url,
         project_name=args.project_name,
@@ -90,8 +79,12 @@ def main(args):
     )
     client.set_config(args, env)
     
-    # 5. Train
-    print(f"Starting training: steps={args.get('num_steps')}, epochs={args.get('num_epochs')}")
+    print(f"\nTraining configuration:")
+    print(f"  - Algorithm: {args.algorithm}")
+    print(f"  - Steps: {args.get('num_steps')}")
+    print(f"  - Epochs: {args.get('num_epochs')}")
+    print(f"  - Batch size: {args.batch_size}")
+    print(f"  - Max turns: {args.multi_turn.max_assistant_turns}")
     
     try:
         final_metrics = client.fit(
@@ -104,7 +97,8 @@ def main(args):
             validate_before_training=True,
             game_stats_client=game_stats,
         )
-        print(f"Training completed! Metrics: {final_metrics}")
+        print(f"\n✓ Training completed!")
+        print(f"Final metrics: {final_metrics}")
     finally:
         env.cleanup()
 

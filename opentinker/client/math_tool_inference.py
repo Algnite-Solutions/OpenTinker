@@ -1,42 +1,21 @@
 #!/usr/bin/env python3
-"""
-Math Inference with Scheduler
-
-This script submits an inference job to the scheduler, which launches a vLLM
-server on allocated GPUs. The script then uses the InferencePipeline to run
-inference through the remote vLLM server.
-
-Usage:
-    1. Start the scheduler:
-       python opentinker/scheduler/launch_scheduler.py
-       
-    2. Start the math game server:
-       python opentinker/environment/math/math_server.py
-       
-    3. Run this script:
-       python math_inference_with_scheduler.py \
-           model_path=/path/to/checkpoint \
-           data_path=/path/to/test.jsonl \
-           scheduler_url=http://localhost:8780
-"""
-
 import hydra
 from omegaconf import OmegaConf
 
-from http_training_client import InferenceSchedulerClient
-from scheduler_client_lifecycle import get_lifecycle_manager
+from utils.http_training_client import InferenceSchedulerClient
+from utils.scheduler_client_lifecycle import get_lifecycle_manager
 from opentinker.environment.inference_pipeline import run_inference
-from opentinker.environment.math import MathGame
+from opentinker.environment.math.math_tool_game import CodeInterpreterMathGame
 from opentinker.environment.game_stats_client import GameStatsClient
 
 
-@hydra.main(config_path="client_config", config_name="math_inference_scheduler_config.yaml", version_base=None)
+@hydra.main(config_path="client_config", config_name="math_code_interpreter_inference_config.yaml", version_base=None)
 def main(args):
-    """Run math inference with scheduler-managed vLLM server."""
+    """Run math code interpreter inference with scheduler-managed vLLM server."""
     lifecycle = get_lifecycle_manager()
     
     print("=" * 60)
-    print("Math Inference with Scheduler")
+    print("Math Code Interpreter Inference with Scheduler")
     print("=" * 60)
     
     if not args.model_path:
@@ -72,27 +51,31 @@ def main(args):
     # 2. Setup GameStatsClient for per-step metrics (with job_id isolation)
     game_stats = GameStatsClient(args.env_endpoint, job_id=job_id)
     if game_stats.health_check():
-        print(f"✓ Connected to game server at {args.env_endpoint}")
+        print(f"✓ Connected to code interpreter game server at {args.env_endpoint}")
         game_stats.reset_all()  # Reset stats for this job before inference
     else:
         print(f"⚠ Game server not available at {args.env_endpoint}, continuing without stats")
+        print(f"  Make sure to start: python opentinker/environment/math/code_interpreter_math_server.py --port 8088")
         game_stats = None
     
     # 3. Run inference using the remote vLLM server
-    print(f"Running inference on {args.data_path}...")
+    print(f"\nRunning code interpreter inference on {args.data_path}...")
+    print(f"  - Multi-turn: max_user_turns={args.multi_turn.max_user_turns}, max_assistant_turns={args.multi_turn.max_assistant_turns}")
+    print(f"  - Max tokens: {args.max_new_tokens} total, {args.get('max_tokens_per_turn', 'unlimited')} per turn")
     
     results = run_inference(
         model_path=None,  # Not needed when using vllm_server_url
         vllm_server_url=vllm_server_url,
         tokenizer_path=args.get("tokenizer_path") or args.model_path,
         data_path=args.data_path,
-        game_class=MathGame,
+        game_class=CodeInterpreterMathGame,
         env_endpoint=args.env_endpoint,
         job_id=job_id,  # Pass job_id for stats isolation
         output_path=args.get("output_path"),
         temperature=args.temperature,
         top_p=args.top_p,
         max_tokens=args.max_new_tokens,
+        max_tokens_per_turn=args.get("max_tokens_per_turn"),
         max_samples=args.get("max_samples"),
         max_user_turns=args.multi_turn.max_user_turns,
         max_assistant_turns=args.multi_turn.max_assistant_turns,
@@ -101,10 +84,11 @@ def main(args):
     # 4. Log game stats after inference
     if game_stats:
         stats = game_stats.get_all_stats()
-        print(f"\nGame Server Stats (job_id={job_id}):")
+        print(f"\nCode Interpreter Stats (job_id={job_id}):")
         print(f"  Total samples: {stats.get('total_samples', 0)}")
         print(f"  Games completed: {stats.get('games_in_step', 0)}")
         print(f"  Mean reward: {stats.get('mean_final_reward', 0):.4f}")
+        print(f"  Code executions: {stats.get('code_executions', 'N/A')}")
     
     if args.get("output_path"):
         print(f"\nResults saved to: {args.output_path}")
@@ -116,4 +100,3 @@ def main(args):
 
 if __name__ == "__main__":
     main()
-

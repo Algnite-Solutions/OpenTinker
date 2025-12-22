@@ -5,14 +5,14 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 from torchdata.stateful_dataloader import StatefulDataLoader
 
-from http_training_client import ServiceClient, SchedulerClient
+from opentinker.client.utils.http_training_client import ServiceClient, SchedulerClient
 from opentinker.environment.base_game_environment import GameEnvironment
 from opentinker.environment.base_data_generator import DynamicGameDataset, collate_fn
 from opentinker.environment.math import MathGame
 from opentinker.environment.static_data_generator import StaticDatasetGenerator
 from opentinker.environment.game_stats_client import GameStatsClient
-from utils import resolve_paths_in_config
-from scheduler_client_lifecycle import get_lifecycle_manager
+from opentinker.client.utils.utils import resolve_paths_in_config
+from opentinker.client.utils.scheduler_client_lifecycle import get_lifecycle_manager
 from verl.trainer.main_ppo import create_rl_sampler
 
 class MathGameEnvironment(GameEnvironment):

@@ -6,7 +6,7 @@ Provides MathGame and related components for math problem solving:
 """
 
 from opentinker.environment.math.math_game import MathGame
-from opentinker.environment.math.code_interpreter_math import CodeInterpreterMathGame
+from opentinker.environment.math.math_tool_game import CodeInterpreterMathGame
 
 __all__ = ["MathGame", "CodeInterpreterMathGame"]
 

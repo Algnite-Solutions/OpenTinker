@@ -21,7 +21,7 @@ from omegaconf import OmegaConf
 from verl.utils.dataset.rl_dataset import collate_fn
 from torchdata.stateful_dataloader import StatefulDataLoader
 from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
-from opentinker.client.utils import prepare_dataset, verify_raw_prompt_format
+from opentinker.client.utils.utils import prepare_dataset, verify_raw_prompt_format
 
 @dataclass
 class RewardFunctionSpec:

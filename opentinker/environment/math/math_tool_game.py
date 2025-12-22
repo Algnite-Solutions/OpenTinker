@@ -1,29 +1,4 @@
 #!/usr/bin/env python3
-"""Code Interpreter Math Game Implementation.
-
-This module provides the CodeInterpreterMathGame class for multi-turn math 
-problem solving with code interpreter. The game handles code execution internally
-by calling a sandbox server.
-
-Works with GymEnvironmentInteraction and GenericAgentLoop (agent_loop algorithm).
-
-Flow:
-1. LLM generates response with ```python...``` code blocks
-2. Game's step() extracts code, calls sandbox, returns stdout/stderr as observation
-3. LLM sees result, generates more code or final answer
-4. When \\boxed{} is detected, compute reward and end game
-
-Example:
-    # Start server:
-    python code_interpreter_math_server.py --sandbox-url http://localhost:8000/run_code
-    
-    # The game handles code execution in step()
-    game = CodeInterpreterMathGame(sandbox_url="http://localhost:8000/run_code")
-    obs = game.reset(ground_truth="42")
-    result = game.step("```python\\nprint(6*7)\\n```")
-    # result.observation = "42\\n"
-"""
-
 import re
 import requests
 from typing import Any, Dict, Optional

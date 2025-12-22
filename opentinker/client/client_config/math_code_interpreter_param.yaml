@@ -58,7 +58,6 @@ multi_turn:
   weave_project: null
   experiment_name: "math_code_interpreter"
 
-# Interaction configuration (GymEnvironmentInteraction -> CodeInterpreterMathGame server)
 interaction:
   name: math_code_interpreter
   class_path: opentinker.environment.gym_environment_interaction.GymEnvironmentInteraction

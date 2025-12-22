@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from verl import DataProto
 from omegaconf import DictConfig, OmegaConf
-from utils import serialize_dataproto
+from .utils import serialize_dataproto
 # from environment import Environment
 
 # Configure logging
@@ -317,7 +317,7 @@ class SchedulerClient:
                 )
             
             # Still queued or starting, wait and retry
-            logger.info(f"Job {job_id} status: {job_status}, waiting...")
+            logger.info(f"Job {job_id} status: {job_status}, waiting for RL server to be ready...")
             time.sleep(self.poll_interval)
     
     def cancel_job(self, job_id: str) -> Dict[str, Any]:
@@ -496,7 +496,7 @@ class InferenceSchedulerClient:
                 error_msg = status_result.get("error_message", "Unknown error")
                 raise RuntimeError(f"Inference job {job_id} failed: {error_msg}")
             
-            logger.info(f"Inference job {job_id} status: {job_status}, waiting...")
+            logger.info(f"Inference job {job_id} status: {job_status}, waiting for inferenceserver to be ready...")
             time.sleep(self.poll_interval)
     
     def get_job_status(self, job_id: str) -> Dict[str, Any]:

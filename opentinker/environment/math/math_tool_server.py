@@ -28,7 +28,7 @@ import time
 from typing import Optional
 
 from opentinker.environment.base_game_server import run_game_server, create_game_app
-from opentinker.environment.math.code_interpreter_math import CodeInterpreterMathGame
+from opentinker.environment.math.math_tool_game import CodeInterpreterMathGame
 
 
 # Global sandbox reference for cleanup

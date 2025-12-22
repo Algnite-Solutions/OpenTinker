@@ -17,7 +17,7 @@ import os
 import time
 import requests
 from typing import Optional, Callable
-
+from .utils import find_free_port
 
 class SchedulerClientLifecycleManager:
     """
@@ -55,7 +55,6 @@ class SchedulerClientLifecycleManager:
         Returns:
             tuple: (subprocess.Popen, int) - The reward server process and the port number used
         """
-        from utils import find_free_port
         
         # Auto-assign port if not specified
         if reward_port is None:

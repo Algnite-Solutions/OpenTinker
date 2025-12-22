@@ -136,7 +136,7 @@ python opentinker/data_preprocess/math_multiturn_w_interaction.py \
 
 ```bash
 # single turn
-python opentinker/client/math_client_unified.py \
+python opentinker/client/math_rl.py \
     tokenizer_path=Qwen/Qwen2.5-1.5B \
     batch_size=16 \
     val_batch_size=64 \
@@ -150,7 +150,7 @@ python opentinker/client/math_client_unified.py \
     interaction.config.env_host=<client_endpoint>
 
 # multi turn tool ca
-python opentinker/client/math_code_interpreter_client.py \
+python opentinker/client/math_tool_rl.py \
     tokenizer_path=Qwen/Qwen2.5-1.5B \
     batch_size=16 \
     val_batch_size=64 \
@@ -164,7 +164,7 @@ python opentinker/client/math_code_interpreter_client.py \
 
 **Gomoku RL (Multi-turn):**
 ```bash
-python opentinker/client/gomoku_client.py \
+python opentinker/client/gomoku_rl.py \
     tokenizer_path=Qwen/Qwen2.5-3B-Instruct \
     batch_size=16 \
     val_batch_size=32 \
@@ -179,7 +179,7 @@ python opentinker/client/gomoku_client.py \
 **Math Inference:**
 ```bash
 # single turn
-python opentinker/client/math_inference_with_scheduler.py \
+python opentinker/client/math_inference.py \
     model_path=<model_name> \
     data_path=data/math/test.parquet \
     output_path=./tmp/results.jsonl \
@@ -188,7 +188,7 @@ python opentinker/client/math_inference_with_scheduler.py \
     scheduler_url=http://<server_endpoint>:<scheduler_port>
 
 # multi turn tool call
-python opentinker/client/math_code_interpreter_inference.py \
+python opentinker/client/math_tool_inference.py \
     model_path=<model_name> \
     data_path=data/math/test.parquet \
     output_path=./tmp/results.jsonl \
@@ -199,7 +199,7 @@ python opentinker/client/math_code_interpreter_inference.py \
 
 **Gomoku Inference:**
 ```bash
-python opentinker/client/gomoku_inference_with_scheduler.py \
+python opentinker/client/gomoku_inference.py \
     model_path=<model_name> \
     output_path=./tmp/results.jsonl \
     max_samples=5 \
@@ -281,8 +281,4 @@ Multi-turn game environment where the model plays Gomoku against an opponent. It
   note         = {GitHub repository}
 }
 ```
-
-## 📈 Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=open-tinker/OpenTinker,from=2025-12-20&type=date&legend=top-left)](https://www.star-history.com/#open-tinker/OpenTinker&from=2025-12-20&type=date&legend=top-left)
 
