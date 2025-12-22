@@ -115,7 +115,7 @@ bash opentinker/scripts/launch_scheduler.sh --scheduler-port <scheduler_port>
 python opentinker/environment/math/math_server.py --port <env_port>
 
 # multi turn tool call
-python opentinker/environment/math/code_interpreter_math_server.py --port <env_port>
+python opentinker/environment/math/math_tool_server.py --port <env_port>
 ```
 
 **For Gomoku Environment:**
