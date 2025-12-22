@@ -26,13 +26,39 @@
 
 ## 📦 Installation
 
-### Prerequisites
+### 🔹 Common Setup (Client and Server)
 
-- Python 3.8+
-- CUDA-compatible GPU(s)
-- Docker (recommended)
+#### Clone the Repository
+```bash
+git clone --recurse-submodules git@github.com:open-tinker/OpenTinker.git
+cd OpenTinker
+```
 
-### Option 1: Docker Installation (Recommended)
+#### Install OpenTinker
+```bash
+pip install -e .
+```
+
+#### Install verl (core package)
+```bash
+cd verl
+pip install -e .
+cd ..
+```
+
+### 💻 Client Setup
+
+After completing the Common Setup, no additional steps are needed.
+> **Note**  
+> The client currently relies on a small subset of functions from `verl`. This dependency is transitional. In future releases, the client will be fully decoupled from `verl`, allowing it to remain completely lightweight and independent of training-related code.
+
+### 🧠 Server Setup
+
+In addition to the Common Setup, it must install verl dependencies.
+
+You can choose one of the following two approaches.
+
+#### Option 1: Docker Installation (Recommended)
 
 ```bash
 # Pull the verl Docker image
@@ -51,22 +77,20 @@ docker run -dit \
   verlai/verl@sha256:3ce56ff018516b28ab9c4f4fc09d3aa67589074495ace75e2674b720aa4d0e5d
 ```
 
-### Option 2: From Source
+#### Option 2: Manual Installation
+
+you can install verl dependencies manually. After completing the Common Setup, run:
 
 ```bash
-# Clone with submodules
-git clone --recurse-submodules git@github.com:open-tinker/OpenTinker.git
-cd OpenTinker
-
-# Install OpenTinker
-pip install -e .
-
-# Install verl dependency
 cd verl
-pip install -e .
+pip install -r requirements.txt
 cd ..
 ```
 
+This installs all GPU and training-related dependencies required by the server.
+
+⚠️ **Warning**  
+Manual installation may introduce version conflicts. For better stability and reproducibility, we recommend using the Docker-based setup whenever possible.
 
 
 ## 🚀 Quick Start
