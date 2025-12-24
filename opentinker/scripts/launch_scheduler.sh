@@ -2,7 +2,7 @@
 # Convenience script to launch the job scheduler
 
 # Default configuration
-AVAILABLE_GPUS="[0,1,2,3,4,5,6,7]"
+AVAILABLE_GPUS="[4,5,6,7,8,9]"
 PORT_RANGE="null"  # Set to null for auto-detection
 NUM_PORTS=200
 SCHEDULER_PORT=8780
