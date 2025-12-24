@@ -524,6 +524,11 @@ class JobSchedulerActor:
         # Background threads for async vLLM startup
         self._startup_threads: Dict[str, threading.Thread] = {}
         
+        # Retry mechanism for GPU availability
+        self._pending_retry_count = 0
+        self._max_retries = 15  # Retry up to 15 times
+        self._retry_interval = 2.0  # 2 seconds between retries (total ~30s)
+        
         logger.info(f"JobSchedulerActor initialized with GPUs: {available_gpus}")
         logger.info(f"GPUs per job: {gpus_per_job}")
         if len(self.available_ports) > 10:
@@ -1314,11 +1319,67 @@ class JobSchedulerActor:
                     # No resources available, put the job back at the front of the queue
                     self.job_queue.insert(0, next_job_id)
                     logger.info(f"⏸️ Job {next_job_id}: Insufficient resources, returned to queue")
+                    
+                    # Schedule a delayed retry to check GPU availability
+                    self._schedule_retry()
                     break
             
             logger.info(f"✅ Scheduling complete: {scheduled_count} job(s) started, {len(self.job_queue)} remaining in queue")
         finally:
             self._scheduling_in_progress = False
+    
+    def _schedule_retry(self):
+        """
+        Schedule a delayed retry for job scheduling.
+        
+        Uses threading.Timer to check GPU physical availability after a delay.
+        This handles the case where GPUs are marked as available in scheduler state
+        but the previous job's processes haven't fully released them yet.
+        """
+        if self._pending_retry_count >= self._max_retries:
+            logger.warning(f"⚠️ Max retries ({self._max_retries}) reached for GPU availability check, stopping retry")
+            self._pending_retry_count = 0
+            return
+        
+        self._pending_retry_count += 1
+        
+        def do_retry():
+            """Timer callback to check GPU availability and retry scheduling."""
+            # Check if queue is empty (e.g., job was cancelled)
+            if not self.job_queue:
+                logger.info("🔄 Retry cancelled: queue is empty")
+                self._pending_retry_count = 0
+                return
+            
+            # Check the first job in queue
+            job = self.jobs.get(self.job_queue[0])
+            if not job:
+                logger.info("🔄 Retry cancelled: job not found")
+                self._pending_retry_count = 0
+                return
+            
+            # Check physical GPU availability
+            idle_count = sum(1 for gpu_id in self.available_gpus 
+                            if check_gpu_available(gpu_id))
+            
+            logger.info(f"🔄 Retry {self._pending_retry_count}/{self._max_retries}: "
+                       f"{idle_count} GPUs physically idle, need {job.num_gpus}")
+            
+            if idle_count >= job.num_gpus:
+                logger.info("🔄 GPUs now available, triggering schedule")
+                self._pending_retry_count = 0  # Reset before scheduling
+                self._schedule_next_job()
+            else:
+                # GPUs still not ready, schedule another retry
+                self._schedule_retry()
+        
+        timer = threading.Timer(self._retry_interval, do_retry)
+        timer.daemon = True
+        timer.start()
+        
+        if self._pending_retry_count == 1:  # Only log on first retry
+            logger.info(f"⏳ Scheduled GPU availability retry in {self._retry_interval}s "
+                       f"(will retry up to {self._max_retries} times, ~{self._max_retries * self._retry_interval}s total)")
     
     def complete_job(self, job_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """

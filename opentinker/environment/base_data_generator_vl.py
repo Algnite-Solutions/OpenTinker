@@ -163,6 +163,7 @@ class DynamicGameDatasetVL(DynamicGameDataset):
             )
             
             input_ids = model_inputs.pop("input_ids")
+            original_input_length = input_ids.shape[-1]  # Save before postprocess
             attention_mask = model_inputs.pop("attention_mask")
             
             # Store other processor outputs (pixel_values, image_grid_thw, etc.)
@@ -185,6 +186,7 @@ class DynamicGameDatasetVL(DynamicGameDataset):
                 model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=True)
             
             input_ids = model_inputs.pop("input_ids")
+            original_input_length = input_ids.shape[-1]  # Save before postprocess
             attention_mask = model_inputs.pop("attention_mask")
             extra_model_inputs = {}
         
@@ -197,6 +199,22 @@ class DynamicGameDatasetVL(DynamicGameDataset):
             left_pad=True,
             truncation=self.truncation,
         )
+        
+        # Check if original prompt was too long (for VL models, images add many tokens)
+        # If so, skip this sample and try another one to avoid agent_loop postprocess errors
+        if original_input_length > self.max_prompt_length:
+            # Log warning only occasionally to avoid spam
+            if item % 100 == 0:
+                logger.warning(
+                    f"Sample {item}: prompt length {original_input_length} exceeds max {self.max_prompt_length}, "
+                    f"resampling with random index"
+                )
+            # Resample with a random index to reduce duplicate probability
+            # Use a simple hash to get a different but deterministic index for the same item
+            new_item = (item * 31 + 17) % len(self)
+            if new_item == item:
+                new_item = (item + 1) % len(self)
+            return self.__getitem__(new_item)
         
         # Compute position IDs
         position_ids = compute_position_id_with_mask(attention_mask)

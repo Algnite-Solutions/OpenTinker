@@ -38,7 +38,7 @@ val_batch_size: 8    # Reduced from 32 for VL model
 # Generation parameters
 temperature: 1.0
 top_p: 1.0
-max_new_tokens: 2048     # Reduced from 4096
+max_new_tokens: 4096     # Reduced from 4096
 max_prompt_tokens: 1024  # Max prompt length
 
 # Algorithm - agent_loop for multi-turn with GymEnvironmentInteraction
