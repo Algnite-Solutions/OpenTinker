@@ -89,6 +89,16 @@ def main(cfg):
             cfg.actor_rollout_ref.rollout.n = 1
             logger.info(f"🔧 PPO/GAE mode: rollout.n = 1 (forced)")
 
+        # LoRA-specific configuration
+        # LoRA params are passed via CLI from scheduler (lora_rank, lora_alpha, etc.)
+        lora_rank = cfg.actor_rollout_ref.model.get("lora_rank", 0)
+        if lora_rank > 0:
+            logger.info(f"🔧 LoRA mode enabled: rank={lora_rank}")
+            # Enable layered summon for memory efficiency with LoRA
+            cfg.actor_rollout_ref.rollout.layered_summon = True
+            # Use safetensors format for LoRA adapter loading
+            cfg.actor_rollout_ref.rollout.load_format = "safetensors"
+            logger.info(f"  - layered_summon: True, load_format: safetensors")
 
 
         # critic

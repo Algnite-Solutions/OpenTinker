@@ -971,6 +971,29 @@ class JobSchedulerActor:
         elif rollout_n:
             logger.info(f"Job {job.job_id}: Ignoring rollout_n={rollout_n} (not in GRPO mode)")
         
+        # Forward LoRA parameters if enabled (lora_rank > 0)
+        lora_config = job.config.get("lora", {})
+        lora_rank = lora_config.get("lora_rank", 0)
+        if lora_rank and lora_rank > 0:
+            cmd.append(f"actor_rollout_ref.model.lora_rank={lora_rank}")
+            
+            lora_alpha = lora_config.get("lora_alpha", 16)
+            cmd.append(f"actor_rollout_ref.model.lora_alpha={lora_alpha}")
+            
+            target_modules = lora_config.get("target_modules", "all-linear")
+            if target_modules:
+                cmd.append(f"actor_rollout_ref.model.target_modules={target_modules}")
+            
+            exclude_modules = lora_config.get("exclude_modules")
+            if exclude_modules:
+                cmd.append(f"actor_rollout_ref.model.exclude_modules={exclude_modules}")
+            
+            lora_adapter_path = lora_config.get("lora_adapter_path")
+            if lora_adapter_path:
+                cmd.append(f"actor_rollout_ref.model.lora_adapter_path={lora_adapter_path}")
+            
+            logger.info(f"Job {job.job_id}: ✓ LoRA enabled: rank={lora_rank}, alpha={lora_alpha}, target_modules={target_modules}")
+        
         logger.info(f"Job {job.job_id}: Launching server with command: {' '.join(cmd)}")
         
         # Create log files for stdout and stderr

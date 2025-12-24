@@ -43,6 +43,12 @@ def main(args):
     server_url = job_result["server_url"]
     lifecycle.register_job(scheduler_client, job_id)
     
+    # Log LoRA config status
+    lora_config = args.get("lora", {})
+    lora_rank = lora_config.get("lora_rank", 0) if lora_config else 0
+    if lora_rank and lora_rank > 0:
+        print(f"✓ LoRA enabled: rank={lora_rank}, alpha={lora_config.get('lora_alpha', 16)}")
+    
     print(f"✓ Job {job_id} allocated at {server_url}")
     
     # 2. Setup environment (job_id is automatically handled)

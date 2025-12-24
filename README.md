@@ -7,26 +7,24 @@
 
   <p>
     <a href="https://open-tinker.github.io/opentinker-page/">Project Page</a> ·
-    <a href="https://wandb.ai/zsqzz/Open-Tinker?nw=nwuserzhusq20">W&B</a> ·
     <a href="https://deepwiki.com/open-tinker/OpenTinker">DeepWiki</a> ·
     <a href="https://join.slack.com/t/opentinker/shared_invite/zt-3lnxuxkfr-QZpzObNvW0DtcQUWzvKtQg">Slack</a>
   </p>
 </div>
 
 
-## 🌟 Key Features
+## 🚀 Quick Start
 
-1. **Separation of Programming and Execution**
-   - Users can perform RL training and inference without local GPU resources.
-   - Built-in Distributed Training and Job Scheduling manage resources transparently.
+Choose an example below to get started. Each example includes step-by-step instructions for setup, training, and inference.
 
-2. **Separation of Environment and Training Code**
-   - Simplifies the design of various agentic task environments.
-   - Includes support for any single-turn and multi-turn agentic tasks.
-
-3. **Seamless Transition from Training to Inference**
-   - Environments and agentic workflows can be seamlessly connected to inference, allowing trained models to be directly applied.
-
+| Task                                             | Description                                                                          | Performance                                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| **[LLM Single-Turn Math](docs/math_singleturn.md)**                       | Mathematical problem solving                                     | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/bwkq1wl8?nw=nwuserzhusq20)                                                                               |
+| **[LLM Multi-Turn Math](docs/math_multiturn.md)** | Multi-turn mathematical problem solving with tool calling                          | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/f5pt6gcw?nw=nwuserzhusq20)                       |
+| **[LLM Single-LoRA Single-Turn Math](docs/lora_singleturn.md)**                  | Math single-turn Trained With LoRA                                                         | TBA                                                                               |
+| **[VLM Single-Turn Math](docs/vlm_geo3k_singleturn.md)**                    | geometry 3k math problem solving                                                          | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/aidfc2y1?nw=nwuserzhusq20)                                                                               |
+| **[VLM Multi-Turn Math](docs/vlm_geo3k_multiturn.md)**             | geometry 3k math problem solving with tool calling                                           | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/r39htm2o?nw=nwuserzhusq20)                |
+| **[LLM Game Agent](docs/gomoku_multiturn.md)**       | A multi-turn gomoku agent | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/7a7ggkw3?nw=nwuserzhusq20)                        |
 
 
 ## 📦 Installation
@@ -96,122 +94,6 @@ This installs all GPU and training-related dependencies required by the server.
 
 ⚠️ **Warning**  
 Manual installation may introduce version conflicts. For better stability and reproducibility, we recommend using the Docker-based setup whenever possible.
-
-
-## 🚀 Quick Start
-
-### 1. Get Your IP Address
-
-```bash
-hostname -I
-```
-
-### 2. Start the Scheduler (Server Side)
-
-```bash
-bash opentinker/scripts/launch_scheduler.sh --scheduler-port <scheduler_port>
-```
-
-### 3. Start the Environment Server (Client Side)
-
-**For Math Environment:**
-```bash
-# single turn
-python opentinker/environment/math/math_server.py --port <env_port>
-
-# multi turn tool call
-python opentinker/environment/math/math_tool_server.py --port <env_port>
-```
-
-**For Gomoku Environment:**
-```bash
-python opentinker/environment/gomoku/gomoku_server.py --port <env_port>
-```
-
-### 4. Run Training/Inference (Client Side)
-
-**Math RL:**
-
-generate data:
-```bash
-python opentinker/data_preprocess/math_multiturn_w_interaction.py \
-    --local_save_dir=<local_save_dir>
-```
-
-
-```bash
-# single turn
-python opentinker/client/math_rl.py \
-    tokenizer_path=Qwen/Qwen2.5-1.5B \
-    batch_size=16 \
-    val_batch_size=64 \
-    num_epochs=5 \
-    save_freq=1000 \
-    test_freq=5 \
-    data_path=data/math_agentloop/train.parquet \
-    val_data_path=data/math_agentloop/test.parquet \
-    scheduler_url=http://<server_endpoint>:<scheduler_port> \
-    interaction.config.env_port=<env_port> \
-    interaction.config.env_host=<client_endpoint>
-
-# multi turn tool ca
-python opentinker/client/math_tool_rl.py \
-    tokenizer_path=Qwen/Qwen2.5-1.5B \
-    batch_size=16 \
-    val_batch_size=64 \
-    num_epochs=5 \
-    save_freq=1000 \
-    test_freq=5 \
-    scheduler_url=http://<server_endpoint>:<scheduler_port> \
-    interaction.config.env_port=<env_port> \
-    interaction.config.env_host=<client_endpoint>
-```
-
-**Gomoku RL (Multi-turn):**
-```bash
-python opentinker/client/gomoku_rl.py \
-    tokenizer_path=Qwen/Qwen2.5-3B-Instruct \
-    batch_size=16 \
-    val_batch_size=32 \
-    num_epochs=5 \
-    save_freq=1000 \
-    test_freq=5 \
-    scheduler_url=http://<server_endpoint>:<scheduler_port> \
-    interaction.config.env_port=<env_port> \
-    interaction.config.env_host=<client_endpoint>
-```
-
-**Math Inference:**
-```bash
-# single turn
-python opentinker/client/math_inference.py \
-    model_path=<model_name> \
-    data_path=data/math/test.parquet \
-    output_path=./tmp/results.jsonl \
-    max_samples=5 \
-    env_endpoint=http://<client_endpoint>:<env_port> \
-    scheduler_url=http://<server_endpoint>:<scheduler_port>
-
-# multi turn tool call
-python opentinker/client/math_tool_inference.py \
-    model_path=<model_name> \
-    data_path=data/math/test.parquet \
-    output_path=./tmp/results.jsonl \
-    max_samples=5 \
-    env_endpoint=http://<client_endpoint>:<env_port> \
-    scheduler_url=http://<server_endpoint>:<scheduler_port>
-```
-
-**Gomoku Inference:**
-```bash
-python opentinker/client/gomoku_inference.py \
-    model_path=<model_name> \
-    output_path=./tmp/results.jsonl \
-    max_samples=5 \
-    env_endpoint=http://<client_endpoint>:<env_port> \
-    scheduler_url=http://<server_endpoint>:<scheduler_port>
-```
-
 
 
 ## 🔐 Authentication

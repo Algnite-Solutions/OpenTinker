@@ -54,6 +54,16 @@ adv_estimator: "grpo"
 # rollout_n: number of samples per prompt for GRPO/grpo_per_step (only used when adv_estimator=grpo or grpo_per_step)
 rollout_n: 8
 
+# LoRA configuration (parameter-efficient fine-tuning)
+# Set lora_rank > 0 to enable LoRA training
+# Reference: verl/verl/trainer/config/model/hf_model.yaml
+lora:
+  lora_rank: 0         # Set to positive value to enable LoRA (e.g., 64)
+  lora_alpha: 16       # LoRA scaling factor
+  target_modules: "all-linear"  # Modules to apply LoRA
+  exclude_modules: null         # Optional: modules to exclude
+  lora_adapter_path: null       # Path to existing adapter for continued training
+
 
 # Interaction configuration
 interaction:
