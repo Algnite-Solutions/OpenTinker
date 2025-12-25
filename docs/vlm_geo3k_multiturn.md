@@ -1,5 +1,7 @@
 # VLM Multi-Turn Math (Geometry3K with Tool Calling)
 
+**Author:** Siqi Zhu
+
 This example demonstrates training a vision-language model to solve geometry problems with multi-turn tool calling.
 
 ## Prerequisites

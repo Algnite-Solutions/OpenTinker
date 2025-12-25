@@ -1,5 +1,7 @@
 # LLM Single-Turn Math
 
+**Author:** Siqi Zhu
+
 This example demonstrates training a language model to solve mathematical problems in a single turn.
 
 ## Prerequisites

@@ -1,5 +1,7 @@
 # LLM Game Agent (Gomoku Multi-Turn)
 
+**Author:** Siqi Zhu
+
 This example demonstrates training a language model to play Gomoku in a multi-turn game environment.
 
 ## Prerequisites

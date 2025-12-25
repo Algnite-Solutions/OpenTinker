@@ -1,5 +1,7 @@
 # LLM Single-LoRA Single-Turn Math
 
+**Author:** Siqi Zhu
+
 This example demonstrates training a language model with LoRA (Low-Rank Adaptation) for mathematical problem solving.
 
 ## Prerequisites
@@ -23,9 +25,10 @@ python opentinker/environment/math/math_server.py --port <env_port>
 
 ```bash
 python opentinker/client/math_rl.py \
-    tokenizer_path=Qwen/Qwen2.5-1.5B \
-    batch_size=16 \
-    val_batch_size=64 \
+    --config-name math_lora_param.yaml \
+    tokenizer_path=Qwen/Qwen2.5-0.5B \
+    batch_size=64 \
+    val_batch_size=100 \
     num_epochs=5 \
     save_freq=1000 \
     test_freq=5 \
@@ -33,10 +36,7 @@ python opentinker/client/math_rl.py \
     val_data_path=data/math_agentloop/test.parquet \
     scheduler_url=http://<server_endpoint>:<scheduler_port> \
     interaction.config.env_port=<env_port> \
-    interaction.config.env_host=<client_endpoint> \
-    actor_rollout_ref.actor.lora.enable=true \
-    actor_rollout_ref.actor.lora.r=16 \
-    actor_rollout_ref.actor.lora.alpha=32
+    interaction.config.env_host=<client_endpoint>
 ```
 
 ## Performance
