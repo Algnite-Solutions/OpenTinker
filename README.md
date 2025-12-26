@@ -25,7 +25,8 @@ Choose an example below to get started. Each example includes step-by-step instr
 | **[LLM Single-LoRA Single-Turn Math](docs/math_lora_singleturn.md)**                  | Math single-turn Trained With LoRA                                                         | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/cl1w5l07?nw=nwuserzhusq20)                        |
 | **[VLM Single-Turn Math](docs/vlm_geo3k_singleturn.md)**                    | geometry 3k math problem solving                                                          | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/aidfc2y1?nw=nwuserzhusq20)                                                                               |
 | **[VLM Multi-Turn Math](docs/vlm_geo3k_multiturn.md)**             | geometry 3k math problem solving with tool calling                                           | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/r39htm2o?nw=nwuserzhusq20)                |
-| **[LLM Game Agent](docs/gomoku_multiturn.md)**       | A multi-turn gomoku agent | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/7a7ggkw3?nw=nwuserzhusq20)                        |
+| **[LLM Gomoku Agent](docs/gomoku_multiturn.md)**       | A multi-turn gomoku agent | [wandb](https://wandb.ai/zsqzz/Open-Tinker/runs/7a7ggkw3?nw=nwuserzhusq20)                        |
+| **[LLM AlfWorld Agent](docs/alfworld_multiturn.md)**       | A multi-turn alfworld agent | TDA                        |
 
 
 ## 📦 Installation
