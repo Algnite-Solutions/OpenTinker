@@ -352,6 +352,7 @@ def create_game_app(
     game_class: Type[AbstractGame],
     stats_class: Type[BaseGameStats] = None,
     pool_size: int = 0,
+    use_thread_pool: bool = True,
     **game_kwargs,
 ) -> FastAPI:
     """Create a FastAPI app for any AbstractGame implementation.
@@ -361,8 +362,11 @@ def create_game_app(
         stats_class: Optional custom stats class (e.g., GomokuGameStats).
                     Defaults to BaseGameStats.
         pool_size: Number of game instances to pre-initialize and reuse.
-                   If > 0, games will be taken from this pool when a new 
+                   If > 0, games will be taken from this pool when a new
                    instance_id is requested, and returned when done.
+        use_thread_pool: If True, use ThreadPoolExecutor for concurrent requests.
+                        If False, process requests synchronously (use with multi-process mode).
+                        Set to False for games with non-thread-safe dependencies (e.g., ALFWorld/tatsu).
         **game_kwargs: Additional arguments to pass to game constructor
     """
     app = FastAPI(
@@ -373,22 +377,27 @@ def create_game_app(
     # Shared state
     games: Dict[str, AbstractGame] = {}
     games_lock = threading.Lock()  # Thread-safe access to games dict
-    
+
     # Thread pool for blocking operations (game.reset, game.step)
-    # This allows concurrent execution of blocking TextWorld operations
-    request_executor = ThreadPoolExecutor(max_workers=max(pool_size, 32))
-    
+    # Only create if use_thread_pool=True
+    # For games with non-thread-safe dependencies (ALFWorld/tatsu), use multi-process mode instead
+    request_executor = (
+        ThreadPoolExecutor(max_workers=max(pool_size, 32)) if use_thread_pool else None
+    )
+
     # Environment pooling logic
     game_pool = queue.Queue()
     if pool_size > 0:
-        print(f"[GameServer] Pre-initializing pool of {pool_size} {game_class.__name__} instances...")
-        
+        print(
+            f"[GameServer] Pre-initializing pool of {pool_size} {game_class.__name__} instances..."
+        )
+
         # Helper function for parallel initialization
         def init_one(i):
             try:
                 game = game_class(**game_kwargs)
                 # Call a minimal reset to trigger environment initialization (the slow part)
-                game.reset() 
+                game.reset()
                 print(f"  Initialized {i + 1}/{pool_size}...")
                 return game
             except Exception as e:
@@ -396,15 +405,22 @@ def create_game_app(
                 return None
 
         import concurrent.futures
+
         # Use a separate executor for initialization (different variable name!)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(pool_size, 20)) as init_executor:
-            future_to_idx = {init_executor.submit(init_one, i): i for i in range(pool_size)}
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(pool_size, 20)
+        ) as init_executor:
+            future_to_idx = {
+                init_executor.submit(init_one, i): i for i in range(pool_size)
+            }
             for future in concurrent.futures.as_completed(future_to_idx):
                 game = future.result()
                 if game:
                     game_pool.put(game)
-        
-        print(f"[GameServer] Pool initialization complete. Actual pool size: {game_pool.qsize()}")
+
+        print(
+            f"[GameServer] Pool initialization complete. Actual pool size: {game_pool.qsize()}"
+        )
 
     # Use MultiJobGameStats for job isolation
     multi_stats = MultiJobGameStats(stats_class=stats_class or BaseGameStats)
@@ -434,20 +450,26 @@ def create_game_app(
                             game = game_pool.get_nowait()
                         except queue.Empty:
                             # Fallback to creating a new one if pool is empty
-                            print(f"[WARNING] Pool empty, creating new {game_class.__name__} (slow!) - instance_id={instance_id}")
+                            print(
+                                f"[WARNING] Pool empty, creating new {game_class.__name__} (slow!) - instance_id={instance_id}"
+                            )
                             game = game_class(**game_kwargs)
                     else:
                         game = game_class(**game_kwargs)
-                    
+
                     games[instance_id] = game
-            
+
             # Reset is the slow part - runs outside the lock
             observation = game.reset(**reset_kwargs)
             return game, observation
-        
-        # Run blocking operation in thread pool for true parallelism
-        loop = asyncio.get_event_loop()
-        game, observation = await loop.run_in_executor(request_executor, _do_reset)
+
+        # Run operation (in thread pool if enabled, otherwise synchronous)
+        if request_executor:
+            loop = asyncio.get_event_loop()
+            game, observation = await loop.run_in_executor(request_executor, _do_reset)
+        else:
+            # Synchronous execution - parallelism comes from multi-process mode
+            game, observation = _do_reset()
 
         # Track that this game has started (with job isolation)
         stats = multi_stats.get_job_stats(job_id)
@@ -496,14 +518,18 @@ def create_game_app(
             )
 
         game = games[instance_id]
-        
+
         def _do_step():
-            """Blocking step operation - runs in thread pool."""
+            """Blocking step operation."""
             return game.step(action)
-        
-        # Run blocking operation in thread pool for true parallelism
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(request_executor, _do_step)
+
+        # Run operation (in thread pool if enabled, otherwise synchronous)
+        if request_executor:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(request_executor, _do_step)
+        else:
+            # Synchronous execution - parallelism comes from multi-process mode
+            result = _do_step()
 
         # Record statistics with instance_id for per-game tracking (with job isolation)
         stats = multi_stats.get_job_stats(job_id)
@@ -621,6 +647,7 @@ def run_game_server(
     port: int = 8081,
     stats_class: Type[BaseGameStats] = None,
     pool_size: int = 0,
+    use_thread_pool: bool = True,
     **game_kwargs,
 ):
     """Create and run a game server using FastAPI + uvicorn.
@@ -631,9 +658,17 @@ def run_game_server(
         port: Port to listen on
         stats_class: Optional custom stats class (e.g., GomokuGameStats)
         pool_size: Number of game instances to pre-initialize and reuse.
+        use_thread_pool: If True, use ThreadPoolExecutor for concurrent requests.
+                        If False, process requests synchronously (for non-thread-safe games).
         **game_kwargs: Additional arguments to pass to game constructor
     """
-    app = create_game_app(game_class, stats_class=stats_class, pool_size=pool_size, **game_kwargs)
+    app = create_game_app(
+        game_class,
+        stats_class=stats_class,
+        pool_size=pool_size,
+        use_thread_pool=use_thread_pool,
+        **game_kwargs,
+    )
 
     print(f"\n{game_class.__name__} Server (FastAPI) running on http://{host}:{port}")
     print("Endpoints:")

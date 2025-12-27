@@ -298,7 +298,7 @@ class GenericAgentLoop(AgentLoopBase):
             )
 
         metrics = {}
-        
+
         # Use a stable request_id if available to allow environment reuse on the server.
         # extra_info.sample_id is often a stable index for the worker/sample.
         stable_id = kwargs.get("extra_info", {}).get("sample_id")
@@ -400,9 +400,13 @@ class GenericAgentLoop(AgentLoopBase):
         try:
             while state != GenericAgentState.TERMINATED:
                 if state == GenericAgentState.PENDING:
-                    state = await self._handle_pending_state(agent_data, sampling_params)
+                    state = await self._handle_pending_state(
+                        agent_data, sampling_params
+                    )
                 elif state == GenericAgentState.GENERATING:
-                    state = await self._handle_generating_state(agent_data, sampling_params)
+                    state = await self._handle_generating_state(
+                        agent_data, sampling_params
+                    )
                 elif state == GenericAgentState.INTERACTING:
                     state = await self._handle_interacting_state(agent_data)
                 else:

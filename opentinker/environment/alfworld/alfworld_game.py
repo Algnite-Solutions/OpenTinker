@@ -77,15 +77,14 @@ class ALFWorldGame(AbstractGame):
     # OPTIMIZATION: Shared game path cache
     # Only the first instance scans the disk, others reuse the cached paths
     # ==========================================
-    _cached_game_paths: Dict[str, List[str]] = {}  # key: cache_key -> list of game paths
+    _cached_game_paths: Dict[
+        str, List[str]
+    ] = {}  # key: cache_key -> list of game paths
     _cache_lock = threading.Lock()
-    
-    # ==========================================
-    # THREAD SAFETY: Global lock for TextWorld operations
-    # TextWorld's tatsu parser is NOT thread-safe (uses shared global state)
-    # This lock ensures only one thread calls TextWorld at a time
-    # ==========================================
-    _textworld_lock = threading.Lock()
+
+    # NOTE: TextWorld's tatsu parser is NOT thread-safe.
+    # We use use_thread_pool=False in the server to disable threading.
+    # Parallelism comes from multi-process mode (--workers 8).
 
     def __init__(
         self,
@@ -183,26 +182,26 @@ class ALFWorldGame(AbstractGame):
 
     def _get_cached_game_paths(self) -> List[str]:
         """Get cached game paths. Only the first instance scans the disk.
-        
+
         OPTIMIZATION: This avoids 32 instances each scanning 8810 game directories.
         Instead, only the first instance scans, and others reuse the cached result.
-        
+
         ALFWorld directory structure:
             json_2.1.1/train/pick_and_place_simple-xxx/trial_xxx/game.tw-pddl
-        
+
         Returns:
             List of trial directory paths (containing game.tw-pddl files)
         """
         # Create a unique cache key based on split and task types
         cache_key = f"{self.split}:{','.join(sorted(self.task_types))}:{self.num_games}"
-        
+
         with ALFWorldGame._cache_lock:
             if cache_key not in ALFWorldGame._cached_game_paths:
                 # First instance: scan the disk
                 alfworld_data = os.path.expandvars(
                     os.environ.get("ALFWORLD_DATA", "$HOME/.cache/alfworld")
                 )
-                
+
                 # Determine base path based on split
                 if self.split == "train":
                     base_path = f"{alfworld_data}/json_2.1.1/train"
@@ -212,9 +211,11 @@ class ALFWorldGame(AbstractGame):
                     base_path = f"{alfworld_data}/json_2.1.1/valid_unseen"
                 else:
                     base_path = f"{alfworld_data}/json_2.1.1/{self.split}"
-                
-                print(f"[ALFWorldGame] First-time scanning: {base_path} (PID: {os.getpid()})...")
-                
+
+                print(
+                    f"[ALFWorldGame] First-time scanning: {base_path} (PID: {os.getpid()})..."
+                )
+
                 # Scan for all matching task types
                 # ALFWorld structure: task_type-xxx/trial_xxx/game.tw-pddl
                 # NOTE: Some trial directories are incomplete (missing game files), so we filter them
@@ -223,7 +224,7 @@ class ALFWorldGame(AbstractGame):
                     # Pattern to find trial directories
                     pattern = os.path.join(base_path, f"{task_type}-*", "trial_*")
                     matching = glob.glob(pattern)
-                    
+
                     # Only keep directories that actually contain a game file
                     for trial_path in matching:
                         game_file = os.path.join(trial_path, "game.tw-pddl")
@@ -234,24 +235,28 @@ class ALFWorldGame(AbstractGame):
                             alt_files = glob.glob(os.path.join(trial_path, "game.*"))
                             if alt_files:
                                 all_paths.append(trial_path)
-                
+
                 # Sort for consistency
                 all_paths.sort()
-                print(f"[ALFWorldGame] Found {len(all_paths)} valid games (with game files).")
-                
+                print(
+                    f"[ALFWorldGame] Found {len(all_paths)} valid games (with game files)."
+                )
+
                 # Apply num_games limit if specified
                 if self.num_games > 0 and len(all_paths) > self.num_games:
                     # Use a fixed seed so all instances get the same subset
                     rng = random.Random(42)
                     all_paths = rng.sample(all_paths, self.num_games)
                     all_paths.sort()
-                
+
                 ALFWorldGame._cached_game_paths[cache_key] = all_paths
-                print(f"[ALFWorldGame] Scan complete. Found {len(all_paths)} games. Cached for reuse.")
+                print(
+                    f"[ALFWorldGame] Scan complete. Found {len(all_paths)} games. Cached for reuse."
+                )
             else:
                 # Subsequent instances: reuse cached paths (no disk scan!)
                 pass
-        
+
         return ALFWorldGame._cached_game_paths[cache_key]
 
     def _init_env(self):
@@ -262,7 +267,7 @@ class ALFWorldGame(AbstractGame):
         """
         if self._initialized:
             return
-        
+
         # Mark as initialized (engine ready, will load specific game on reset)
         self._initialized = True
         print(f"[ALFWorldGame] Engine ready (PID: {os.getpid()}, id: {id(self)})")
@@ -293,16 +298,18 @@ class ALFWorldGame(AbstractGame):
         # Get cached game paths (only first instance scans disk)
         # Paths are now trial directories: .../task_type-xxx/trial_xxx/
         game_paths = self._get_cached_game_paths()
-        
+
         if not game_paths:
-            raise RuntimeError(f"No games found for split='{self.split}', task_types={self.task_types}")
-        
+            raise RuntimeError(
+                f"No games found for split='{self.split}', task_types={self.task_types}"
+            )
+
         # Select a random game from the cached paths (trial directory)
         selected_path = random.choice(game_paths)
-        
+
         # Game file is directly in the trial directory
         game_file = os.path.join(selected_path, "game.tw-pddl")
-        
+
         # Fallback to other possible game file names
         if not os.path.exists(game_file):
             game_file = os.path.join(selected_path, "game.z8")
@@ -333,35 +340,32 @@ class ALFWorldGame(AbstractGame):
             lost=True,
             extras=["walkthrough", "expert_plan"],
         )
-        
-        # THREAD SAFETY: TextWorld's parser is not thread-safe
-        # Use global lock for all TextWorld operations
-        with ALFWorldGame._textworld_lock:
-            # Direct loading: this is the key optimization!
-            # We bypass ALFWorld's init_env which scans all 8810 games
-            self._tw_env = textworld.start(
-                game_file, infos, wrappers=[Filter, AlfredDemangler()]
-            )
-            self._env = self._tw_env  # For compatibility with step()
-            
-            # Reset the environment
-            game_state, info = self._tw_env.reset()
-        
+
+        # Direct loading: bypass ALFWorld's init_env which scans all 8810 games
+        # Thread safety: use_thread_pool=False in server, parallelism from multi-process mode
+        self._tw_env = textworld.start(
+            game_file, infos, wrappers=[Filter, AlfredDemangler()]
+        )
+        self._env = self._tw_env  # For compatibility with step()
+
+        # Reset the environment
+        game_state, info = self._tw_env.reset()
+
         # Extract observation
-        if hasattr(game_state, 'feedback'):
+        if hasattr(game_state, "feedback"):
             self._current_obs = game_state.feedback
         elif isinstance(game_state, str):
             self._current_obs = game_state
         else:
             self._current_obs = str(game_state)
-        
+
         self._current_info = info
 
         # Parse task description from observation
         self._task_desc = self._extract_task_description(self._current_obs)
 
         # Get admissible commands
-        if hasattr(game_state, 'admissible_commands'):
+        if hasattr(game_state, "admissible_commands"):
             self._admissible_commands = game_state.admissible_commands or []
         else:
             self._admissible_commands = info.get("admissible_commands", [])
@@ -413,30 +417,27 @@ class ALFWorldGame(AbstractGame):
         # Parse action from LLM output
         parsed_action = self._parse_action(action)
 
-        # THREAD SAFETY: TextWorld's parser is not thread-safe
-        # Use global lock for all TextWorld operations
-        with ALFWorldGame._textworld_lock:
-            # Execute action in TextWorld environment
-            # TextWorld returns: game_state, reward, done, info
-            game_state, reward, done, info = self._tw_env.step(parsed_action)
-            
-            # Extract observation from game_state
-            if hasattr(game_state, 'feedback'):
-                obs = game_state.feedback
-            elif isinstance(game_state, str):
-                obs = game_state
-            else:
-                obs = str(game_state)
+        # Execute action in TextWorld environment
+        # TextWorld returns: game_state, reward, done, info
+        # Thread safety: use_thread_pool=False in server, parallelism from multi-process mode
+        game_state, reward, done, info = self._tw_env.step(parsed_action)
 
-            # Get admissible commands
-            if hasattr(game_state, 'admissible_commands'):
-                admissible_commands = game_state.admissible_commands or []
-            else:
-                admissible_commands = []
+        # Extract observation from game_state
+        if hasattr(game_state, "feedback"):
+            obs = game_state.feedback
+        elif isinstance(game_state, str):
+            obs = game_state
+        else:
+            obs = str(game_state)
 
-        # Update state (outside lock - just memory operations)
+        # Update state
         self._current_obs = obs
-        self._admissible_commands = admissible_commands
+
+        # Get admissible commands
+        if hasattr(game_state, "admissible_commands"):
+            self._admissible_commands = game_state.admissible_commands or []
+        else:
+            self._admissible_commands = []
 
         # Check for timeout
         if self._step_count >= self.max_steps and not done:
@@ -554,7 +555,7 @@ class ALFWorldGame(AbstractGame):
         self, task_type: Optional[str] = None, **kwargs
     ) -> str:
         """Generate user message with rendered initial state for prompt."""
-        # Reset to get actual observation
+        # Reset to get actual observatio
         self.reset(task_type=task_type, **kwargs)
 
         return (

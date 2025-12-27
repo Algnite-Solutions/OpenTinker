@@ -58,11 +58,15 @@ interaction:
     env_host: 0.0.0.0
     env_port: 8092
     env_endpoint: http://${interaction.config.env_host}:${interaction.config.env_port}
+    # If you run the ALFWorld env server in sharded mode (--shards N),
+    # set env_shards=N. The client will route each instance_id to a stable shard.
+    env_shards: 8
     max_steps: 20 # ALFWorld episodes max steps
     max_total_steps: 20 # Max environment step calls (controls rollout turns)
     observation_template: "{observation}"
     # ALFWorld specific settings
     split: train # train, eval_in_distribution, eval_out_of_distribution
+    max_parallel_calls: 32
 
 multi_turn:
   max_user_turns: ${interaction.config.max_total_steps}
@@ -77,4 +81,4 @@ scheduler_url: "http://0.0.0.0:8780"
 scheduler_api_key: otk_98b8db24ccd64c92e1fdd9a232e209fa
 
 # GPU settings
-num_gpus: 2
+num_gpus: 4
