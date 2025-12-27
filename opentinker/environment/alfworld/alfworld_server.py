@@ -34,8 +34,14 @@ def main():
     parser.add_argument(
         "--num_games",
         type=int,
-        default=5,
+        default=10,
         help="Number of games to load (-1 = all games, e.g. 64 for faster loading)",
+    )
+    parser.add_argument(
+        "--pool_size",
+        type=int,
+        default=0,
+        help="Number of game instances to pre-initialize and reuse",
     )
     args = parser.parse_args()
 
@@ -43,6 +49,7 @@ def main():
     print(f"  Max steps: {args.max_steps}")
     print(f"  Split: {args.split}")
     print(f"  Num games: {args.num_games if args.num_games > 0 else 'all'}")
+    print(f"  Pool size: {args.pool_size if args.pool_size > 0 else 'none'}")
     print(f"  Config: {args.config_path or 'default'}")
     print("\nReward structure:")
     print(f"  Success: +{ALFWorldGame.REWARD_SUCCESS}")
@@ -54,6 +61,8 @@ def main():
         game_class=ALFWorldGame,
         host=args.host,
         port=args.port,
+        stats_class=None,
+        pool_size=args.pool_size,
         config_path=args.config_path,
         max_steps=args.max_steps,
         split=args.split,

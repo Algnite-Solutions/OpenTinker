@@ -12,9 +12,11 @@ Example:
     result = game.step("go to desk 1")
 """
 
+import glob
 import os
 import random
 import re
+import threading
 from typing import Any, Dict, List, Optional
 import logging
 
@@ -23,6 +25,9 @@ from opentinker.environment.base_game import AbstractGame, StepResult
 # ALFWorld imports - install with: pip install alfworld
 try:
     import alfworld.agents.environment as alfworld_env
+    import textworld
+    from textworld.envs.wrappers import Filter
+    from alfworld.agents.environment.alfred_tw_env import AlfredDemangler
     import yaml
 
     ALFWORLD_AVAILABLE = True
@@ -49,7 +54,7 @@ class ALFWorldGame(AbstractGame):
     REWARD_INVALID_ACTION = -0.1
 
     # Limits
-    DEFAULT_MAX_STEPS = 50
+    DEFAULT_MAX_STEPS = 20
 
     # Task types in ALFWorld
     ALL_TASK_TYPES = [
@@ -64,7 +69,23 @@ class ALFWorldGame(AbstractGame):
     # Process-level cache for ALFWorld environments (safe within same process)
     # Key: (config_path, split, num_games) -> initialized environment
     # Note: Each Ray worker process gets its own cache, avoiding cross-process issues
+    # IMPORTANT: Set to False to disable sharing when running parallel instances
     _shared_envs: dict = {}
+    _use_shared_env: bool = False  # Disabled by default to prevent state conflicts
+
+    # ==========================================
+    # OPTIMIZATION: Shared game path cache
+    # Only the first instance scans the disk, others reuse the cached paths
+    # ==========================================
+    _cached_game_paths: Dict[str, List[str]] = {}  # key: cache_key -> list of game paths
+    _cache_lock = threading.Lock()
+    
+    # ==========================================
+    # THREAD SAFETY: Global lock for TextWorld operations
+    # TextWorld's tatsu parser is NOT thread-safe (uses shared global state)
+    # This lock ensures only one thread calls TextWorld at a time
+    # ==========================================
+    _textworld_lock = threading.Lock()
 
     def __init__(
         self,
@@ -73,6 +94,7 @@ class ALFWorldGame(AbstractGame):
         task_types: Optional[List[str]] = None,
         split: str = "train",
         num_games: int = -1,
+        use_shared_env: bool = False,  # Default to per-instance env for safety
     ):
         """Initialize ALFWorld game.
 
@@ -82,6 +104,8 @@ class ALFWorldGame(AbstractGame):
             task_types: Task types to sample from (None = all types)
             split: Dataset split ("train", "eval_in_distribution", "eval_out_of_distribution")
             num_games: Number of games to load (-1 = all games, e.g. 64 for faster loading)
+            use_shared_env: If True, share env across instances (fast but causes state conflicts with parallel runs).
+                           If False, each instance gets its own env (slower init but correct).
         """
         if not ALFWORLD_AVAILABLE:
             raise ImportError(
@@ -93,18 +117,22 @@ class ALFWorldGame(AbstractGame):
         self.task_types = task_types or self.ALL_TASK_TYPES
         self.split = split
         self.num_games = num_games
+        self._use_shared_env = use_shared_env
 
         # Load ALFWorld config
         self._load_alfworld_config()
 
         # Game state (instance-specific, NOT shared)
-        self._env = None  # Will be set from shared cache in reset()
+        self._env = None  # Will be created in reset()
+        self._own_env = None  # Per-instance env when not using shared env
+        self._tw_env = None  # TextWorld environment instance (for optimized mode)
         self._current_obs = None
         self._current_info = None
         self._step_count = 0
         self._task_desc = ""
         self._admissible_commands = []
         self._done = False
+        self._initialized = False  # Track if engine is ready
 
     def _load_alfworld_config(self):
         """Load ALFWorld configuration."""
@@ -153,31 +181,99 @@ class ALFWorldGame(AbstractGame):
                 },
             }
 
-    def _init_env(self):
-        """Initialize ALFWorld environment using process-level cache.
-
-        The environment is shared within the same process to avoid repeated
-        loading of game files (which takes ~4 seconds for 8810 games).
-        Each Ray worker process gets its own cached environment.
+    def _get_cached_game_paths(self) -> List[str]:
+        """Get cached game paths. Only the first instance scans the disk.
+        
+        OPTIMIZATION: This avoids 32 instances each scanning 8810 game directories.
+        Instead, only the first instance scans, and others reuse the cached result.
+        
+        ALFWorld directory structure:
+            json_2.1.1/train/pick_and_place_simple-xxx/trial_xxx/game.tw-pddl
+        
+        Returns:
+            List of trial directory paths (containing game.tw-pddl files)
         """
-        cache_key = (self.config_path, self.split, self.num_games)
+        # Create a unique cache key based on split and task types
+        cache_key = f"{self.split}:{','.join(sorted(self.task_types))}:{self.num_games}"
+        
+        with ALFWorldGame._cache_lock:
+            if cache_key not in ALFWorldGame._cached_game_paths:
+                # First instance: scan the disk
+                alfworld_data = os.path.expandvars(
+                    os.environ.get("ALFWORLD_DATA", "$HOME/.cache/alfworld")
+                )
+                
+                # Determine base path based on split
+                if self.split == "train":
+                    base_path = f"{alfworld_data}/json_2.1.1/train"
+                elif self.split == "eval_in_distribution":
+                    base_path = f"{alfworld_data}/json_2.1.1/valid_seen"
+                elif self.split == "eval_out_of_distribution":
+                    base_path = f"{alfworld_data}/json_2.1.1/valid_unseen"
+                else:
+                    base_path = f"{alfworld_data}/json_2.1.1/{self.split}"
+                
+                print(f"[ALFWorldGame] First-time scanning: {base_path} (PID: {os.getpid()})...")
+                
+                # Scan for all matching task types
+                # ALFWorld structure: task_type-xxx/trial_xxx/game.tw-pddl
+                # NOTE: Some trial directories are incomplete (missing game files), so we filter them
+                all_paths = []
+                for task_type in self.task_types:
+                    # Pattern to find trial directories
+                    pattern = os.path.join(base_path, f"{task_type}-*", "trial_*")
+                    matching = glob.glob(pattern)
+                    
+                    # Only keep directories that actually contain a game file
+                    for trial_path in matching:
+                        game_file = os.path.join(trial_path, "game.tw-pddl")
+                        if os.path.exists(game_file):
+                            all_paths.append(trial_path)
+                        else:
+                            # Check for alternative game file formats
+                            alt_files = glob.glob(os.path.join(trial_path, "game.*"))
+                            if alt_files:
+                                all_paths.append(trial_path)
+                
+                # Sort for consistency
+                all_paths.sort()
+                print(f"[ALFWorldGame] Found {len(all_paths)} valid games (with game files).")
+                
+                # Apply num_games limit if specified
+                if self.num_games > 0 and len(all_paths) > self.num_games:
+                    # Use a fixed seed so all instances get the same subset
+                    rng = random.Random(42)
+                    all_paths = rng.sample(all_paths, self.num_games)
+                    all_paths.sort()
+                
+                ALFWorldGame._cached_game_paths[cache_key] = all_paths
+                print(f"[ALFWorldGame] Scan complete. Found {len(all_paths)} games. Cached for reuse.")
+            else:
+                # Subsequent instances: reuse cached paths (no disk scan!)
+                pass
+        
+        return ALFWorldGame._cached_game_paths[cache_key]
 
-        if cache_key not in ALFWorldGame._shared_envs:
-            print(
-                f"[ALFWorldGame] Initializing environment for split='{self.split}', num_games={self.num_games}..."
-            )
-            env_type = self._config["env"]["type"]
-            env_class = alfworld_env.get_environment(env_type)
-            env = env_class(self._config)
-            ALFWorldGame._shared_envs[cache_key] = env.init_env(batch_size=1)
-            print(f"[ALFWorldGame] Environment cached (PID: {os.getpid()})")
+    def _init_env(self):
+        """Initialize ALFWorld environment.
 
-        self._env = ALFWorldGame._shared_envs[cache_key]
+        OPTIMIZED: Uses direct TextWorld loading instead of ALFWorld's heavy init_env.
+        This avoids redundant disk scanning across multiple instances.
+        """
+        if self._initialized:
+            return
+        
+        # Mark as initialized (engine ready, will load specific game on reset)
+        self._initialized = True
+        print(f"[ALFWorldGame] Engine ready (PID: {os.getpid()}, id: {id(self)})")
 
     def reset(
         self, task_type: Optional[str] = None, seed: Optional[int] = None, **kwargs
     ) -> str:
         """Reset the game to a new episode.
+
+        OPTIMIZED: Uses cached game paths and direct TextWorld loading.
+        This avoids redundant disk scanning - only the first instance scans.
 
         Args:
             task_type: Specific task type to use (None = random from task_types)
@@ -187,29 +283,88 @@ class ALFWorldGame(AbstractGame):
         Returns:
             Initial observation string
         """
-        # Initialize environment if needed
+        # Initialize engine if needed
         self._init_env()
 
         # Set seed if provided
         if seed is not None:
             random.seed(seed)
 
-        # Reset environment
-        obs, info = self._env.reset()
+        # Get cached game paths (only first instance scans disk)
+        # Paths are now trial directories: .../task_type-xxx/trial_xxx/
+        game_paths = self._get_cached_game_paths()
+        
+        if not game_paths:
+            raise RuntimeError(f"No games found for split='{self.split}', task_types={self.task_types}")
+        
+        # Select a random game from the cached paths (trial directory)
+        selected_path = random.choice(game_paths)
+        
+        # Game file is directly in the trial directory
+        game_file = os.path.join(selected_path, "game.tw-pddl")
+        
+        # Fallback to other possible game file names
+        if not os.path.exists(game_file):
+            game_file = os.path.join(selected_path, "game.z8")
+        if not os.path.exists(game_file):
+            # Try to find any game file
+            possible_files = glob.glob(os.path.join(selected_path, "game.*"))
+            if possible_files:
+                game_file = possible_files[0]
+            else:
+                raise RuntimeError(f"No game file found in {selected_path}")
 
-        # Extract observation and task
-        # Handle obs being list, tuple, or string
-        if isinstance(obs, (list, tuple)):
-            self._current_obs = obs[0]
+        # Close previous TextWorld environment if exists
+        if self._tw_env is not None:
+            try:
+                self._tw_env.close()
+            except Exception:
+                pass
+
+        # Create TextWorld environment with direct file loading (no disk scan!)
+        infos = textworld.EnvInfos(
+            feedback=True,
+            inventory=True,
+            description=True,
+            admissible_commands=True,
+            score=True,
+            max_score=True,
+            won=True,
+            lost=True,
+            extras=["walkthrough", "expert_plan"],
+        )
+        
+        # THREAD SAFETY: TextWorld's parser is not thread-safe
+        # Use global lock for all TextWorld operations
+        with ALFWorldGame._textworld_lock:
+            # Direct loading: this is the key optimization!
+            # We bypass ALFWorld's init_env which scans all 8810 games
+            self._tw_env = textworld.start(
+                game_file, infos, wrappers=[Filter, AlfredDemangler()]
+            )
+            self._env = self._tw_env  # For compatibility with step()
+            
+            # Reset the environment
+            game_state, info = self._tw_env.reset()
+        
+        # Extract observation
+        if hasattr(game_state, 'feedback'):
+            self._current_obs = game_state.feedback
+        elif isinstance(game_state, str):
+            self._current_obs = game_state
         else:
-            self._current_obs = obs
+            self._current_obs = str(game_state)
+        
         self._current_info = info
 
         # Parse task description from observation
         self._task_desc = self._extract_task_description(self._current_obs)
 
         # Get admissible commands
-        self._admissible_commands = info.get("admissible_commands", [[]])[0]
+        if hasattr(game_state, 'admissible_commands'):
+            self._admissible_commands = game_state.admissible_commands or []
+        else:
+            self._admissible_commands = info.get("admissible_commands", [])
 
         # Reset state
         self._step_count = 0
@@ -232,9 +387,7 @@ class ALFWorldGame(AbstractGame):
 
         if self._admissible_commands:
             formatted += "\n=== Available Actions ===\n"
-            formatted += "\n".join(f"- {cmd}" for cmd in self._admissible_commands[:20])
-            if len(self._admissible_commands) > 20:
-                formatted += f"\n... and {len(self._admissible_commands) - 20} more"
+            formatted += "\n".join(f"- {cmd}" for cmd in self._admissible_commands)
 
         return formatted
 
@@ -260,18 +413,30 @@ class ALFWorldGame(AbstractGame):
         # Parse action from LLM output
         parsed_action = self._parse_action(action)
 
-        # Execute action in environment
-        obs, reward, done, info = self._env.step([parsed_action])
+        # THREAD SAFETY: TextWorld's parser is not thread-safe
+        # Use global lock for all TextWorld operations
+        with ALFWorldGame._textworld_lock:
+            # Execute action in TextWorld environment
+            # TextWorld returns: game_state, reward, done, info
+            game_state, reward, done, info = self._tw_env.step(parsed_action)
+            
+            # Extract observation from game_state
+            if hasattr(game_state, 'feedback'):
+                obs = game_state.feedback
+            elif isinstance(game_state, str):
+                obs = game_state
+            else:
+                obs = str(game_state)
 
-        # Extract from batch (handle list or tuple)
-        obs = obs[0] if isinstance(obs, (list, tuple)) else obs
-        reward = reward[0] if isinstance(reward, (list, tuple)) else reward
-        done = done[0] if isinstance(done, (list, tuple)) else done
+            # Get admissible commands
+            if hasattr(game_state, 'admissible_commands'):
+                admissible_commands = game_state.admissible_commands or []
+            else:
+                admissible_commands = []
 
-        # Update state
+        # Update state (outside lock - just memory operations)
         self._current_obs = obs
-        self._current_info = info
-        self._admissible_commands = info.get("admissible_commands", [[]])[0]
+        self._admissible_commands = admissible_commands
 
         # Check for timeout
         if self._step_count >= self.max_steps and not done:

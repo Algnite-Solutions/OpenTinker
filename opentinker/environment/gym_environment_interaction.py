@@ -208,6 +208,20 @@ class GymEnvironmentInteraction(BaseInteraction):
             if hasattr(env, "close"):
                 env.close()
 
+        # Notify remote game server to return instance to pool
+        if self.env_endpoint is not None:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{self.env_endpoint}/finalize",
+                        json={"instance_id": instance_id, "job_id": self.job_id},
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    ) as response:
+                        if response.status != 200:
+                            logger.warning(f"[finalize_interaction] Server returned {response.status}")
+            except Exception as e:
+                logger.warning(f"[finalize_interaction] Failed to notify server: {e}")
+
     # #Note(Siqi): this will likely cause a bug
     # async def mark_truncated(self, instance_id: str, reason: str = "external_limit", **kwargs) -> None:
     #     """Mark a game as done due to external truncation (e.g., response_length limit).
