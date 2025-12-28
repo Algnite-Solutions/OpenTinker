@@ -45,10 +45,10 @@ algorithm: "agent_loop"
 #   - "grpo"          : Standard GRPO (outcome-only advantage)
 #   - "grpo_per_step" : Per-step GRPO with return-based advantages (for multi-turn tasks)
 #   - "gae"           : Generalized Advantage Estimation (for PPO, requires critic)
-adv_estimator: "grpo"
+adv_estimator: "gae"
 # rollout_n: number of samples per prompt for GRPO/grpo_per_step
 # For PPO (gae), rollout_n is typically 1
-rollout_n: 8
+rollout_n: 1
 
 # Interaction configuration
 interaction:
@@ -66,7 +66,7 @@ interaction:
     observation_template: "{observation}"
     # ALFWorld specific settings
     split: train # train, eval_in_distribution, eval_out_of_distribution
-    max_parallel_calls: 32
+    max_parallel_calls: 8
 
 multi_turn:
   max_user_turns: ${interaction.config.max_total_steps}
