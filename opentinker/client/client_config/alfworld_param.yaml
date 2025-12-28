@@ -66,7 +66,6 @@ interaction:
     observation_template: "{observation}"
     # ALFWorld specific settings
     split: train # train, eval_in_distribution, eval_out_of_distribution
-    max_parallel_calls: 8
 
 multi_turn:
   max_user_turns: ${interaction.config.max_total_steps}
