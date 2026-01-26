@@ -6,10 +6,11 @@
   </p>
 
   <p>
+    <a href="https://arxiv.org/abs/2601.07376">Paper</a> ·
     <a href="https://open-tinker.github.io/opentinker-page/">Project Page</a> ·
     <a href="https://deepwiki.com/open-tinker/OpenTinker">DeepWiki</a> ·
     <a href="https://join.slack.com/t/opentinker/shared_invite/zt-3lnxuxkfr-QZpzObNvW0DtcQUWzvKtQg">Slack</a> ·
-    <a href="https://raw.githubusercontent.com/open-tinker/Assets/c94528fbb429d32bbd9896eec0ffc7e14172afd3/wechat_group.JPG">Wechat</a>
+    <a href="https://raw.githubusercontent.com/open-tinker/Assets/e01c3be43247ac19b1e40d2a4ee54fde19cee869/wechat.JPG">Wechat</a>
   </p>
 </div>
 
@@ -146,11 +147,13 @@ This 2×2 design space enables four distinct paradigms, each suited to different
 ## 📖 Citation
 
 ```
-@misc{opentinker2025,
-  title        = {OpenTinker: Democratizing Agentic Reinforcement Learning as a Service},
-  author       = {Siqi Zhu and Jiaxuan You},
-  year         = {2025},
-  howpublished = {\url{https://github.com/open-tinker/OpenTinker}},
-  note         = {GitHub repository}
+@misc{zhu2026opentinkerseparatingconcernsagentic,
+      title={OpenTinker: Separating Concerns in Agentic Reinforcement Learning}, 
+      author={Siqi Zhu and Jiaxuan You},
+      year={2026},
+      eprint={2601.07376},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2601.07376}, 
 }
 ```
