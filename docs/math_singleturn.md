@@ -12,13 +12,13 @@ This example demonstrates training a language model to solve mathematical proble
 ## Step 1: Start the Scheduler (Server Side)
 
 ```bash
-bash opentinker/scripts/launch_scheduler.sh --scheduler-port <scheduler_port>
+bash opentinker/scripts/launch_scheduler.sh --scheduler-port 8000
 ```
 
 ## Step 2: Start the Math Environment (Client Side)
 
 ```bash
-python opentinker/environment/math/math_server.py --port <env_port>
+python opentinker/environment/math/math_server.py --port 8001
 ```
 
 ## Step 3: Generate Training Data
@@ -38,11 +38,11 @@ python opentinker/client/math_rl.py \
     num_epochs=5 \
     save_freq=1000 \
     test_freq=5 \
-    data_path=data/math_agentloop/train.parquet \
-    val_data_path=data/math_agentloop/test.parquet \
-    scheduler_url=http://<server_endpoint>:<scheduler_port> \
-    interaction.config.env_port=<env_port> \
-    interaction.config.env_host=<client_endpoint>
+    data_path=new_data/train.parquet \
+    val_data_path=new_data/test.parquet \
+    scheduler_url=http://localhost:8000 \
+    interaction.config.env_port=8001 \
+    interaction.config.env_host=localhost
 ```
 
 ## Step 5: Run Inference (Optional)

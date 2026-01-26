@@ -40,7 +40,7 @@ cd OpenTinker
 ```
 
 #### Install OpenTinker
-
+Use docker or not, you need to do this anyway.
 ```bash
 pip install -e .
 ```
