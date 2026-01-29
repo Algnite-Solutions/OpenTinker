@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hydra
 from omegaconf import OmegaConf
+from urllib.parse import urlparse
 
 from utils.http_training_client import ServiceClient, SchedulerClient
 from opentinker.environment.math import MathGame
@@ -34,6 +35,21 @@ def main(args):
 
     job_id = job_result["job_id"]
     server_url = job_result["server_url"]
+    
+    # If using SSH port forwarding, replace remote IP with localhost
+    import re
+    if server_url and 'localhost' in args.get("scheduler_url", ""):
+        # Extract port from server_url
+        scheduler_url = args.get("scheduler_url", "")
+        match = re.search(r':(\d+)$', server_url)
+        if match:
+            port = match.group(1)
+            original_url = server_url
+            server_url = f"http://{urlparse(scheduler_url).hostname}:{port}"
+            print(f"🔄 SSH Forwarding Mode:")
+            print(f"   Original: {original_url}")
+            print(f"   Modified: {server_url}")
+            print(f"   ⚠️  Ensure port {port} is forwarded!")
     lifecycle.register_job(scheduler_client, job_id)
 
     # Log LoRA config status

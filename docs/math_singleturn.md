@@ -35,7 +35,7 @@ python opentinker/client/math_rl.py \
     tokenizer_path=Qwen/Qwen2.5-1.5B \
     batch_size=16 \
     val_batch_size=64 \
-    num_epochs=5 \
+    num_epochs=1 \
     save_freq=1000 \
     test_freq=5 \
     data_path=new_data/train.parquet \
