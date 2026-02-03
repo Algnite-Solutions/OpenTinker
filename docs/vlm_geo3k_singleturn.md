@@ -25,25 +25,26 @@ python opentinker/environment/geo3k/geo3k_server.py --port <env_port>
 ## Step 3: Generate Training Data
 
 ```bash
-python opentinker/data_preprocess/geo3k_multiturn_w_interaction.py \
-    --local_save_dir=data/geo3k_multiturn_w_tool
+python opentinker/data_preprocess/geo3k.py \
+    --local_save_dir=data/geo3k
 ```
 
 ## Step 4: Run Training
 
 ```bash
 python opentinker/client/geo3k_rl.py \
-    tokenizer_path=Qwen/Qwen2-VL-2B-Instruct \
+    tokenizer_path=Qwen/Qwen3-VL-4B-Instruct \
+    processor_path=Qwen/Qwen3-VL-4B-Instruct \
     batch_size=16 \
-    val_batch_size=64 \
-    data_path=data/geo3k_multiturn_w_tool/train.parquet \
-    val_data_path=data/geo3k_multiturn_w_tool/test.parquet \
-    num_epochs=5 \
+    val_batch_size=32 \
+    data_path=data/geo3k/train.parquet \
+    val_data_path=data/geo3k/test.parquet \
+    num_epochs=1 \
     save_freq=1000 \
     test_freq=5 \
-    scheduler_url=http://<server_endpoint>:<scheduler_port> \
-    interaction.config.env_port=<env_port> \
-    interaction.config.env_host=<client_endpoint>
+    scheduler_url=http://$SCHEDULER_IP:8000 \
+    interaction.config.env_port=8001 \
+    interaction.config.env_host=$ENVIRONMENT_IP
 ```
 
 ## Performance
