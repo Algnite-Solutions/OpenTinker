@@ -7,6 +7,7 @@ It follows the same pattern as math_rl.py but uses VL-specific components.
 
 import hydra
 from omegaconf import OmegaConf
+from urllib.parse import urlparse
 
 from opentinker.client.utils.http_training_client import ServiceClient, SchedulerClient
 from opentinker.environment.geo3k import Geo3KGameEnvironment
@@ -41,8 +42,19 @@ def main(args):
     server_url = job_result["server_url"]
     lifecycle.register_job(scheduler_client, job_id)
 
-    print(f"✓ Job {job_id} allocated at {server_url}")
+    
 
+        # If using SSH port forwarding, replace remote IP with localhost
+    import re
+    if server_url:
+        # Extract port from server_url, the scheduler return internal url
+        scheduler_url = args.get("scheduler_url", "")
+        match = re.search(r':(\d+)$', server_url)
+        if match:
+            port = match.group(1)
+            original_url = server_url
+            server_url = f"http://{urlparse(scheduler_url).hostname}:{port}"
+    print(f"✓ Job {job_id} allocated at {server_url}")
     # 2. Setup Geo3K VL environment
     env_endpoint = args.interaction.config.env_endpoint
     env = Geo3KGameEnvironment(
