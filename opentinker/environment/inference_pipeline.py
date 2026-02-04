@@ -203,20 +203,25 @@ class InferencePipeline:
         self.model_path = model_path
         self.tokenizer_path = tokenizer_path or model_path
 
-        # Load tokenizer
-        print(f"Loading tokenizer from {self.tokenizer_path}...")
+        # Load tokenizer - strip trailing slash and detect local paths
+        tokenizer_path_clean = self.tokenizer_path.rstrip("/")
+        is_local_path = tokenizer_path_clean.startswith("/") or tokenizer_path_clean.startswith(".")
+        print(f"Loading tokenizer from {tokenizer_path_clean}...")
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.tokenizer_path, trust_remote_code=trust_remote_code
+            tokenizer_path_clean,
+            trust_remote_code=trust_remote_code,
+            local_files_only=is_local_path,
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Load model for offline mode
         if self.mode == "offline":
-            print(f"Loading model from {self.model_path} with vLLM (offline mode)...")
+            model_path_clean = self.model_path.rstrip("/")
+            print(f"Loading model from {model_path_clean} with vLLM (offline mode)...")
             self.model = LLM(
-                model=self.model_path,
-                tokenizer=self.tokenizer_path,
+                model=model_path_clean,
+                tokenizer=tokenizer_path_clean,
                 tensor_parallel_size=tensor_parallel_size,
                 gpu_memory_utilization=gpu_memory_utilization,
                 trust_remote_code=trust_remote_code,
